@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D-анатомия кисти</title>
+  <meta name="description" content="Интерактивная 3D-модель правой кисти: кожа, мышцы, связки и кости. Пальцы сгибаются ползунками и повторяют движения руки перед вебкамерой.">
+  <meta name="theme-color" content="#1e1f24">
+  <!-- Иконка вкладки: просто эмодзи в SVG, без отдельного файла -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖐️</text></svg>">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Import map: объясняем браузеру, откуда брать библиотеку Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Панель слоёв -->
+  <aside id="panel">
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="layers">Слои</button>
+        <button type="button" class="tab" data-tab="motion">Движение</button>
+        <button type="button" class="tab" data-tab="camera">Камера</button>
+      </div>
+      <div class="head-buttons">
+        <button id="help-open" type="button" class="icon-button" aria-label="Как пользоваться">?</button>
+        <button id="panel-toggle" type="button" class="icon-button" aria-label="Свернуть панель">☰</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <!-- Вкладка «Слои» -->
+      <section id="tab-layers" class="tab-page">
+        <div id="layers"></div>
+        <div class="presets">
+          <button type="button" data-preset="all">Все слои</button>
+          <button type="button" data-preset="deep">Связки и кости</button>
+          <button type="button" data-preset="bones">Только кости</button>
+        </div>
+      </section>
+
+      <!-- Вкладка «Движение» -->
+      <section id="tab-motion" class="tab-page" hidden>
+        <p class="hint">Сгибание пальцев, %. Меньше нуля — лёгкое переразгибание.
+          «Отвести большой» — большой палец уходит вперёд от ладони.</p>
+        <div id="motion-sliders"></div>
+        <div class="presets">
+          <button type="button" data-pose="open">Раскрыть</button>
+          <button type="button" data-pose="fist">Кулак</button>
+          <button type="button" data-pose="point">Указать</button>
+          <button type="button" data-pose="like">Класс</button>
+          <button type="button" data-pose="oppose">Противопоставить</button>
+          <button type="button" data-pose="rest">Покой</button>
+          <button type="button" data-pose="reset">Сброс</button>
+          <button type="button" id="wave">▶ Волна</button>
+        </div>
+        <p class="note">Оранжевым светятся мышцы, которые выполняют движение (упрощённо).</p>
+      </section>
+
+      <!-- Вкладка «Камера» -->
+      <section id="tab-camera" class="tab-page" hidden>
+        <p class="hint">Покажи руку в вебкамеру, и модель повторит движения пальцев.</p>
+        <div class="presets">
+          <button type="button" id="cam-toggle" class="primary">Включить камеру</button>
+        </div>
+        <p id="cam-status" class="cam-status">Камера выключена.</p>
+        <label class="check">
+          <input type="checkbox" id="cam-rotate" checked>
+          Поворачивать модель вслед за рукой
+        </label>
+        <p class="note">
+          Правую руку модель показывает так, как ты сам видишь свою руку, левую — как в зеркале.
+          Держи руку целиком в кадре, на расстоянии 30–60 см.
+          Если кончик большого пальца касается другого пальца («ОК», щепоть), модель тоже сводит их кончики.<br>
+          Видео обрабатывается прямо в браузере и никуда не отправляется.
+        </p>
+      </section>
+
+      <p class="note">
+        Связки пальцев показаны схематично. Модель: BodyParts3D, CC BY 4.0.<br>
+        Учебный проект, не медицинский источник.
+      </p>
+    </div>
+  </aside>
+
+  <!-- Карточка выбранной части (появляется после клика) -->
+  <aside id="details" hidden>
+    <button id="details-close" type="button" aria-label="Закрыть">×</button>
+    <span id="d-layer" class="chip"></span>
+    <h2 id="d-ru"></h2>
+    <p id="d-la" class="latin"></p>
+    <p id="d-desc"></p>
+    <p id="d-schematic" class="badge" hidden>Схематично: этой связки нет в исходной модели, положение примерное.</p>
+  </aside>
+
+  <!-- Подпись рядом с курсором при наведении -->
+  <div id="tooltip" hidden></div>
+
+  <!-- Превью с камеры и найденные точки руки -->
+  <div id="cam-preview" hidden>
+    <video id="cam-video" playsinline muted></video>
+    <canvas id="cam-overlay"></canvas>
+  </div>
+
+  <div id="info" hidden></div>
+
+  <!-- Экран загрузки: виден, пока грузится 3D-модель -->
+  <div id="loader">
+    <div class="loader-card">
+      <h1>3D-анатомия кисти</h1>
+      <p>Кожа, мышцы, связки и кости правой руки</p>
+      <div class="progress"><div id="loader-bar"></div></div>
+      <p id="loader-text">Загружаю 3D-модель…</p>
+    </div>
+  </div>
+
+  <!-- Справка «Как пользоваться» -->
+  <dialog id="help">
+    <button id="help-close" type="button" class="dialog-close" aria-label="Закрыть">×</button>
+    <h2>Как пользоваться</h2>
+    <h3>Смотреть</h3>
+    <ul>
+      <li><b>Повернуть:</b> зажми левую кнопку мыши (на телефоне — проведи пальцем).</li>
+      <li><b>Приблизить:</b> колёсико мыши (на телефоне — разведи два пальца).</li>
+      <li><b>Сдвинуть:</b> правая кнопка мыши (на телефоне — два пальца).</li>
+      <li><b>Узнать название:</b> наведи на часть, а для описания кликни (на телефоне — коснись).</li>
+    </ul>
+    <h3>Вкладки</h3>
+    <ul>
+      <li><b>Слои:</b> включай кожу, мышцы, связки и кости и меняй их прозрачность.
+        Сквозь слой прозрачнее 50% можно кликать.</li>
+      <li><b>Движение:</b> ползунки сгибают пальцы и запястье, есть готовые позы и «Волна».
+        Мышцы, которые выполняют движение, светятся оранжевым.</li>
+      <li><b>Камера:</b> покажи руку в вебкамеру, и модель повторит движения пальцев.
+        Видео обрабатывается прямо в браузере и никуда не отправляется.</li>
+    </ul>
+    <h3>О проекте</h3>
+    <p>Модель — BodyParts3D, © DBCLS, лицензия CC BY 4.0. Связки пальцев добавлены схематично.
+      Распознавание руки — MediaPipe (Google), Apache 2.0.
+      Подробности в файле <a href="CREDITS.md" target="_blank" rel="noopener">CREDITS.md</a>.</p>
+    <p class="badge">Учебный проект. Он не заменяет учебники анатомии и не подходит для медицинских решений.</p>
+    <div class="presets"><button type="button" id="help-ok" class="primary">Понятно</button></div>
+  </dialog>
+
+  <!-- Наш код. type="module" нужен, чтобы работал import -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>

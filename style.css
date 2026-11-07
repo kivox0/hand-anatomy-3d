@@ -1,0 +1,582 @@
+/* Убираем отступы, чтобы 3D-сцена занимала всё окно */
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1e1f24;
+  color: #e8e8ec;
+  font-family: system-ui, sans-serif;
+}
+
+canvas {
+  display: block;
+}
+
+/* Подсказка снизу: по центру свободного места справа от панели */
+#info {
+  position: absolute;
+  bottom: 12px;
+  left: calc(50% + 156px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 344px);
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+
+#info.faded {
+  opacity: 0;
+}
+
+/* ---------- Панель слоёв ---------- */
+#panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 280px;
+  /* если окно низкое (например, телефон боком), панель не вылезает за край, а прокручивается */
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(20, 21, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Вкладки */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tab {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #a9abb5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.tab-page[hidden] {
+  display: none;
+}
+
+.hint {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  color: #a9abb5;
+}
+
+/* Строка ползунка движения: название | ползунок | значение */
+.motion-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.motion-row input[type=range] {
+  width: 100%;
+  accent-color: #ffa25c;
+}
+
+.presets button.active {
+  background: rgba(255, 162, 92, 0.25);
+  border-color: rgba(255, 162, 92, 0.6);
+}
+
+/* Кнопки «?» и «☰» справа от вкладок */
+.head-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #a9abb5;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+#panel-toggle {
+  display: none; /* кнопка нужна только на телефоне */
+}
+
+#layers {
+  margin-top: 10px;
+}
+
+.panel-body {
+  overflow-y: auto;
+  min-height: 0;
+  /* полоса прокрутки тонкая и стоит в отступе панели, не закрывая проценты */
+  scrollbar-width: thin;
+  margin-right: -10px;
+  padding-right: 10px;
+}
+
+/* Строка слоя: название | ползунок | проценты */
+.layer {
+  display: grid;
+  grid-template-columns: 96px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.layer-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.layer input[type=range] {
+  width: 100%;
+  accent-color: #8fb8ff;
+}
+
+.value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #a9abb5;
+  font-size: 12px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.presets button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.presets button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8d8f99;
+}
+
+/* ---------- Вкладка «Камера» ---------- */
+.presets button.primary {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(255, 162, 92, 0.22);
+  border-color: rgba(255, 162, 92, 0.6);
+}
+
+.presets button.primary:hover {
+  background: rgba(255, 162, 92, 0.35);
+}
+
+.presets button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.cam-status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Превью с камеры: справа внизу. Отражаем как зеркало, так привычнее двигаться */
+#cam-preview {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 240px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #000;
+}
+
+#cam-preview[hidden] {
+  display: none;
+}
+
+#cam-preview video,
+#cam-preview canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+/* пока камера включена, карточка справа и подсказка снизу не должны заезжать на превью */
+body.camera-on #details {
+  max-height: calc(100% - 300px);
+}
+
+/* с камерой подсказка про мышь не нужна, а место внизу занимает превью */
+body.camera-on #info {
+  display: none;
+}
+
+/* ---------- Подпись у курсора ---------- */
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(10, 10, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  line-height: 1.35;
+  pointer-events: none; /* подпись не мешает мышке */
+}
+
+#tooltip strong {
+  display: block;
+  font-weight: 600;
+}
+
+#tooltip em {
+  display: block;
+  color: #a9abb5;
+  font-size: 12px;
+}
+
+/* ---------- Карточка выбранной части ---------- */
+#details {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 300px;
+  max-height: calc(100% - 100px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(20, 21, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#details[hidden],
+#tooltip[hidden] {
+  display: none;
+}
+
+#details-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: #a9abb5;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+#details-close:hover {
+  color: #fff;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* цвет метки совпадает с цветом слоя */
+.chip[data-layer=skin]      { background: rgba(242, 198, 168, 0.25); color: #f6d6c0; }
+.chip[data-layer=muscles]   { background: rgba(184, 67, 58, 0.35);   color: #f3b0a9; }
+.chip[data-layer=ligaments] { background: rgba(169, 211, 230, 0.25); color: #cfe7f2; }
+.chip[data-layer=bones]     { background: rgba(233, 223, 200, 0.2);  color: #efe7d6; }
+
+#details h2 {
+  margin: 8px 32px 2px 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+#details .latin {
+  margin: 0 0 10px;
+  font-style: italic;
+  color: #a9abb5;
+}
+
+#d-desc {
+  margin: 0;
+}
+
+.badge {
+  margin: 10px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(143, 184, 255, 0.12);
+  color: #bcd3ff;
+  font-size: 12px;
+}
+
+/* ---------- Телефон: панель внизу, её можно свернуть ---------- */
+@media (max-width: 600px) {
+  #panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    border-radius: 12px 12px 0 0;
+    padding: 10px 16px;
+  }
+
+  #panel-toggle {
+    display: block;
+  }
+
+  #panel {
+    max-height: none;
+  }
+
+  #panel.collapsed .panel-body {
+    display: none;
+  }
+
+  /* если ползунков много, панель прокручивается и не закрывает всю кисть */
+  .panel-body {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  #info {
+    top: 12px;
+    bottom: auto;
+    left: 50%;
+    max-width: calc(100% - 32px);
+  }
+
+  /* карточка сверху на всю ширину, подсказку в это время прячем */
+  #details {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 45%;
+  }
+
+  body.has-selection #info {
+    display: none;
+  }
+
+  /* превью маленькое, справа сверху; подсказку сверху в это время прячем */
+  #cam-preview {
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    width: 120px;
+  }
+
+  body.camera-on #info {
+    display: none;
+  }
+
+  body.camera-on #details {
+    max-height: 45%;
+    right: 136px;
+  }
+}
+
+/* ---------- Экран загрузки ---------- */
+#loader {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #1e1f24;
+  transition: opacity 0.5s;
+}
+
+#loader.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-card {
+  width: min(360px, 100%);
+  text-align: center;
+}
+
+.loader-card h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 650;
+}
+
+.loader-card p {
+  margin: 0;
+  color: #a9abb5;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.progress {
+  height: 6px;
+  margin: 22px 0 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+#loader-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: #ffa25c;
+  transition: width 0.2s;
+}
+
+#loader.failed #loader-bar {
+  background: #e05d5d;
+}
+
+#loader.failed #loader-text {
+  color: #f3b0a9;
+}
+
+/* ---------- Справка ---------- */
+#help {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: #24252b;
+  color: #e8e8ec;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#help::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#help h2 {
+  margin: 0 32px 8px 0;
+  font-size: 19px;
+}
+
+#help h3 {
+  margin: 14px 0 4px;
+  font-size: 14px;
+  color: #ffa25c;
+}
+
+#help ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+#help li {
+  margin: 3px 0;
+}
+
+#help p {
+  margin: 4px 0;
+}
+
+#help a {
+  color: #8fb8ff;
+}
+
+.dialog-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: #a9abb5;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.dialog-close:hover {
+  color: #fff;
+}
